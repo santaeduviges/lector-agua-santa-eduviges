@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Agua Potable Santa Eduviges</title>
+
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <meta name="theme-color" content="#1d4ed8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Agua Eduviges" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- SheetJS para Excel (.xlsx, .xls) y CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- React 18 y ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  <!-- Babel Standalone para interpretar JSX directamente en el navegador -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Estilos para Impresión de Recibo Térmico (58mm) -->
+  <style>
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #thermal-receipt, #thermal-receipt * {
+        visibility: visible !important;
+      }
+      #thermal-receipt {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 58mm;
+        margin: 0;
+        padding: 4px;
+        box-shadow: none !important;
+        border: none !important;
+        background: white !important;
+        color: black !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- ÍCONOS SVG NATIVOS (Sin librerías externas) ---
+    const IconWrapper = ({ children, className = "w-5 h-5", ...props }) => (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        {...props}
+      >
+        {children}
+      </svg>
+    );
+
+    const Droplet = (props) => (
+      <IconWrapper {...props}>
+        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+      </IconWrapper>
+    );
+
+    const FileSpreadsheet = (props) => (
+      <IconWrapper {...props}>
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+        <polyline points="14 2 14 8 20 8" />
+        <path d="M8 13h2" />
+        <path d="M14 13h2" />
+        <path d="M8 17h2" />
+        <path d="M14 17h2" />
+      </IconWrapper>
+    );
+
+    const Plus = (props) => (
+      <IconWrapper {...props}>
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </IconWrapper>
+    );
+
+    const Settings = (props) => (
+      <IconWrapper {...props}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </IconWrapper>
+    );
+
+    const CheckCircle2 = (props) => (
+      <IconWrapper {...props}>
+        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </IconWrapper>
+    );
+
+    const AlertCircle = (props) => (
+      <IconWrapper {...props}>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </IconWrapper>
+    );
+
+    const AlertTriangle = (props) => (
+      <IconWrapper {...props}>
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </IconWrapper>
+    );
+
+    const Check = (props) => (
+      <IconWrapper {...props}>
+        <polyline points="20 6 9 17 4 12" />
+      </IconWrapper>
+    );
+
+    const X = (props) => (
+      <IconWrapper {...props}>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </IconWrapper>
+    );
+
+    const Printer = (props) => (
+      <IconWrapper {...props}>
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </IconWrapper>
+    );
+
+    const Send = (props) => (
+      <IconWrapper {...props}>
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </IconWrapper>
+    );
+
+    const Share2 = (props) => (
+      <IconWrapper {...props}>
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+      </IconWrapper>
+    );
+
+    const Download = (props) => (
+      <IconWrapper {...props}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </IconWrapper>
+    );
+
+    const Upload = (props) => (
+      <IconWrapper {...props}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </IconWrapper>
+    );
+
+    const Search = (props) => (
+      <IconWrapper {...props}>
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </IconWrapper>
+    );
+
+    const ArrowRight = (props) => (
+      <IconWrapper {...props}>
+        <line x1="5" y1="12" x2="19" y2="12" />
+        <polyline points="12 5 19 12 12 19" />
+      </IconWrapper>
+    );
+
+    const MapPin = (props) => (
+      <IconWrapper {...props}>
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+        <circle cx="12" cy="10" r="3" />
+      </IconWrapper>
+    );
+
+    const TrendingUp = (props) => (
+      <IconWrapper {...props}>
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
+      </IconWrapper>
+    );
+
+    const DollarSign = (props) => (
+      <IconWrapper {...props}>
+        <line x1="12" y1="1" x2="12" y2="23" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      </IconWrapper>
+    );
+
+    // --- CONFIGURACIÓN TARIFARIA INICIAL ---
+    const DEFAULT_TARIFF = {
+      providerName: "Agua Potable Santa Eduviges",
+      providerRuc: "J0310000000000",
+      providerPhone: "+505 8888-9999",
+      currency: "C$",
+      fixedCharge: 150.00,
+      baseAllowanceM3: 15,
+      tier1Rate: 12.00,
+      tier1Limit: 30,
+      tier2Rate: 20.00,
+      sewerageFee: 25.00,
+      receiptNotes: "Favor pagar antes del día 10 del mes."
+    };
+
+    const NOVEDADES_COMUNES = [
+      "Sin novedad",
+      "Medidor empañado",
+      "Posible fuga interna",
+      "Medidor trabado/dañado",
+      "Casa deshabitada",
+      "Perro bravo / No se pudo acceder",
+      "Medidor bajo tierra",
+      "Conexión directa sospechosa"
+    ];
+
+    const INITIAL_HOUSES = [
+      {
+        id: "se-001",
+        codigo: "SE-001",
+        nombre: "María Eugenia Flores",
+        medidor: "MED-8901",
+        lecturaAnterior: 412,
+        lecturaActual: null,
+        estatus: "Pendiente",
+        novedades: "Sin novedad",
+        consumo: null,
+        tarifa: "Residencial",
+        costo: null,
+        phone: "+50588880001",
+        readingDate: null,
+        pendingBalance: 0
+      },
+      {
+        id: "se-002",
+        codigo: "SE-002",
+        nombre: "Carlos Alberto Morales",
+        medidor: "MED-8902",
+        lecturaAnterior: 580,
+        lecturaActual: 598,
+        estatus: "Leído",
+        novedades: "Sin novedad",
+        consumo: 18,
+        tarifa: "Residencial",
+        costo: 211.00,
+        phone: "+50588880002",
+        readingDate: "2026-09-24",
+        pendingBalance: 0
+      },
+      {
+        id: "se-003",
+        codigo: "SE-003",
+        nombre: "Doña Rosa Pastora",
+        medidor: "MED-8903",
+        lecturaAnterior: 215,
+        lecturaActual: null,
+        estatus: "Pendiente",
+        novedades: "Sin novedad",
+        consumo: null,
+        tarifa: "Social",
+        costo: null,
+        phone: "+50588880003",
+        readingDate: null,
+        pendingBalance: 0
+      },
+      {
+        id: "se-004",
+        codigo: "SE-004",
+        nombre: "Juan José Gutiérrez",
+        medidor: "MED-8904",
+        lecturaAnterior: 890,
+        lecturaActual: null,
+        estatus: "Pendiente",
+        novedades: "Posible fuga interna",
+        consumo: null,
+        tarifa: "Comercial",
+        costo: null,
+        phone: "+50588880004",
+        readingDate: null,
+        pendingBalance: 0
+      }
+    ];
+
+    function sanitizeHouses(list) {
+      if (!Array.isArray(list)) return [];
+      return list
+        .filter((h) => {
+          if (!h) return false;
+          const cod = String(h.codigo || '').trim().toLowerCase();
+          const nom = String(h.nombre || '').trim().toLowerCase();
+          return cod !== 'codigo' && cod !== 'código' && nom !== 'nombre' && cod !== '';
+        })
+        .map((h, idx) => ({
+          ...h,
+          id: h.id || `house-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`
+        }));
+    }
+
+    function parseCSVLine(line, delimiter) {
+      const row = [];
+      let inQuotes = false;
+      let currentToken = '';
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            currentToken += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === delimiter && !inQuotes) {
+          row.push(currentToken.trim());
+          currentToken = '';
+        } else {
+          currentToken += char;
+        }
+      }
+      row.push(currentToken.trim());
+      return row;
+    }
+
+    function calculateWaterBill(previousReading, currentReading, pendingBalance = 0, tariff = DEFAULT_TARIFF) {
+      if (currentReading === null || currentReading === undefined || isNaN(currentReading) || currentReading < previousReading) {
+        return {
+          consumptionM3: 0,
+          fixedCharge: tariff.fixedCharge,
+          consumptionCharge: 0,
+          sewerageFee: tariff.sewerageFee,
+          pendingBalance: pendingBalance,
+          total: tariff.fixedCharge + tariff.sewerageFee + pendingBalance,
+          breakdown: []
+        };
+      }
+
+      const consumptionM3 = currentReading - previousReading;
+      let consumptionCharge = 0;
+      const breakdown = [];
+
+      breakdown.push({
+        concept: `Cargo Básico (hasta ${tariff.baseAllowanceM3} m³)`,
+        amount: tariff.fixedCharge
+      });
+
+      if (consumptionM3 > tariff.baseAllowanceM3) {
+        const excess = consumptionM3 - tariff.baseAllowanceM3;
+        const tier1Capacity = tariff.tier1Limit - tariff.baseAllowanceM3;
+        const tier1M3 = Math.min(excess, tier1Capacity);
+        const tier1Total = tier1M3 * tariff.tier1Rate;
+        consumptionCharge += tier1Total;
+
+        breakdown.push({
+          concept: `Consumo (${tariff.baseAllowanceM3 + 1}-${tariff.baseAllowanceM3 + tier1M3} m³) @ ${tariff.currency}${tariff.tier1Rate}`,
+          amount: tier1Total
+        });
+
+        if (excess > tier1Capacity) {
+          const tier2M3 = excess - tier1Capacity;
+          const tier2Total = tier2M3 * tariff.tier2Rate;
+          consumptionCharge += tier2Total;
+
+          breakdown.push({
+            concept: `Excedente (> ${tariff.tier1Limit} m³, ${tier2M3} m³) @ ${tariff.currency}${tariff.tier2Rate}`,
+            amount: tier2Total
+          });
+        }
+      }
+
+      if (tariff.sewerageFee > 0) {
+        breakdown.push({
+          concept: 'Mantenimiento de Red',
+          amount: tariff.sewerageFee
+        });
+      }
+
+      if (pendingBalance > 0) {
+        breakdown.push({
+          concept: 'Saldo Anterior Pendiente',
+          amount: pendingBalance
+        });
+      }
+
+      const subtotal = tariff.fixedCharge + consumptionCharge + tariff.sewerageFee;
+      const total = subtotal + pendingBalance;
+
+      return {
+        consumptionM3,
+        fixedCharge: tariff.fixedCharge,
+        consumptionCharge,
+        sewerageFee: tariff.sewerageFee,
+        pendingBalance,
+        total,
+        breakdown
+      };
+    }
+
+    // --- COMPONENTE PRINCIPAL ---
+    function App() {
+      // Cargar datos previos de localStorage si existen
+      const [houses, setHouses] = useState(() => {
+        try {
+          const saved = localStorage.getItem('santa_eduviges_houses');
+          return saved ? sanitizeHouses(JSON.parse(saved)) : sanitizeHouses(INITIAL_HOUSES);
+        } catch {
+          return sanitizeHouses(INITIAL_HOUSES);
+        }
+      });
+
+      const [tariff, setTariff] = useState(() => {
+        try {
+          const saved = localStorage.getItem('santa_eduviges_tariff');
+          return saved ? JSON.parse(saved) : DEFAULT_TARIFF;
+        } catch {
+          return DEFAULT_TARIFF;
+        }
+      });
+
+      const [selectedHouse, setSelectedHouse] = useState(null);
+      const [readingInput, setReadingInput] = useState('');
+      const [novedadInput, setNovedadInput] = useState('Sin novedad');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [selectedTarifaFilter, setSelectedTarifaFilter] = useState('ALL');
+      const [filterStatus, setFilterStatus] = useState('ALL');
+
+      const [activeTab, setActiveTab] = useState('route');
+      const [showReceiptModal, setShowReceiptModal] = useState(false);
+      const [toastMessage, setToastMessage] = useState(null);
+      const [showNewHouseModal, setShowNewHouseModal] = useState(false);
+
+      const [showImportModal, setShowImportModal] = useState(false);
+      const [importText, setImportText] = useState('');
+      const [importParsedPreview, setImportParsedPreview] = useState([]);
+      const [importMode, setImportMode] = useState('append');
+      const [importError, setImportError] = useState(null);
+
+      const [newHouse, setNewHouse] = useState({
+        codigo: '',
+        nombre: '',
+        medidor: '',
+        lecturaAnterior: 0,
+        tarifa: 'Residencial',
+        novedades: 'Sin novedad',
+        phone: '',
+        pendingBalance: 0
+      });
+
+      const receiptPrintRef = useRef(null);
+
+      // Guardado automático en localStorage
+      useEffect(() => {
+        try {
+          localStorage.setItem('santa_eduviges_houses', JSON.stringify(houses));
+        } catch (e) {
+          console.error('Error al guardar datos:', e);
+        }
+      }, [houses]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('santa_eduviges_tariff', JSON.stringify(tariff));
+        } catch (e) {
+          console.error('Error al guardar tarifa:', e);
+        }
+      }, [tariff]);
+
+      const notify = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3500);
+      };
+
+      const tarifasDisponibles = useMemo(() => {
+        const list = new Set(houses.map((h) => h.tarifa || 'Residencial'));
+        return Array.from(list);
+      }, [houses]);
+
+      const filteredHouses = useMemo(() => {
+        return houses.filter((h) => {
+          const matchSearch =
+            (h.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (h.codigo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (h.medidor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (h.novedades && h.novedades.toLowerCase().includes(searchTerm.toLowerCase()));
+          const matchTarifa = selectedTarifaFilter === 'ALL' || h.tarifa === selectedTarifaFilter;
+          const matchStatus = filterStatus === 'ALL' || h.estatus === filterStatus;
+          return matchSearch && matchTarifa && matchStatus;
+        });
+      }, [houses, searchTerm, selectedTarifaFilter, filterStatus]);
+
+      const stats = useMemo(() => {
+        const total = houses.length;
+        const completed = houses.filter((h) => h.estatus === 'Leído').length;
+        const pending = total - completed;
+        let totalM3 = 0;
+        let totalBilled = 0;
+
+        houses.forEach((h) => {
+          if (h.estatus === 'Leído' && h.lecturaActual !== null) {
+            const bill = calculateWaterBill(h.lecturaAnterior, h.lecturaActual, h.pendingBalance, tariff);
+            totalM3 += bill.consumptionM3;
+            totalBilled += (h.costo !== null && h.costo !== undefined ? h.costo : bill.total);
+          }
+        });
+
+        return { total, completed, pending, totalM3, totalBilled };
+      }, [houses, tariff]);
+
+      const handleOpenReading = (house) => {
+        setSelectedHouse(house);
+        setReadingInput(house.lecturaActual !== null ? house.lecturaActual.toString() : '');
+        setNovedadInput(house.novedades || 'Sin novedad');
+      };
+
+      const handleSaveReading = (printDirectly = false) => {
+        if (!selectedHouse) return;
+        const readingValue = parseFloat(readingInput);
+
+        if (isNaN(readingValue)) {
+          notify('Por favor ingrese un valor numérico para la Lectura Actual.');
+          return;
+        }
+
+        if (readingValue < selectedHouse.lecturaAnterior) {
+          notify(`Error: Lectura Actual (${readingValue}) no puede ser menor a la Anterior (${selectedHouse.lecturaAnterior}).`);
+          return;
+        }
+
+        const calculatedBill = calculateWaterBill(selectedHouse.lecturaAnterior, readingValue, selectedHouse.pendingBalance, tariff);
+        const consumption = calculatedBill.consumptionM3;
+
+        const updatedHouses = houses.map((h) => {
+          if (h.codigo === selectedHouse.codigo) {
+            return {
+              ...h,
+              lecturaActual: readingValue,
+              consumo: consumption,
+              costo: calculatedBill.total,
+              novedades: novedadInput || 'Sin novedad',
+              readingDate: new Date().toISOString().split('T')[0],
+              estatus: 'Leído'
+            };
+          }
+          return h;
+        });
+
+        setHouses(updatedHouses);
+        setSelectedHouse({
+          ...selectedHouse,
+          lecturaActual: readingValue,
+          consumo: consumption,
+          costo: calculatedBill.total,
+          novedades: novedadInput || 'Sin novedad',
+          readingDate: new Date().toISOString().split('T')[0],
+          estatus: 'Leído'
+        });
+
+        notify(`Lectura guardada para ${selectedHouse.nombre}`);
+
+        if (printDirectly) {
+          setShowReceiptModal(true);
+        }
+      };
+
+      const handlePrint = () => {
+        window.print();
+      };
+
+      const handleSendWhatsApp = (house) => {
+        if (!house || house.lecturaActual === null) return;
+        const bill = calculateWaterBill(house.lecturaAnterior, house.lecturaActual, house.pendingBalance, tariff);
+        const finalCosto = house.costo !== null && house.costo !== undefined ? house.costo : bill.total;
+
+        const message = `*${tariff.providerName}*\n` +
+          `Estimado(a) *${house.nombre}*,\n` +
+          `Detalle de facturación de agua potable:\n\n` +
+          `🏷️ *Código:* ${house.codigo}\n` +
+          `🔢 *Medidor:* ${house.medidor}\n` +
+          `🏷️ *Tarifa:* ${house.tarifa}\n` +
+          `📅 *Fecha:* ${house.readingDate || new Date().toISOString().split('T')[0]}\n` +
+          `--------------------------\n` +
+          `📊 *Lectura Anterior:* ${house.lecturaAnterior} m³\n` +
+          `📊 *Lectura Actual:* ${house.lecturaActual} m³\n` +
+          `💧 *Consumo:* ${bill.consumptionM3} m³\n` +
+          `⚠️ *Novedades:* ${house.novedades || 'Sin novedad'}\n` +
+          `--------------------------\n` +
+          `💵 *COSTO TOTAL:* ${tariff.currency} ${finalCosto.toFixed(2)}\n\n` +
+          `📌 ${tariff.receiptNotes}\n` +
+          `Tel. Atención: ${tariff.providerPhone}`;
+
+        const cleanPhone = (house.phone || '').replace(/[^0-9]/g, '');
+        const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+      };
+
+      const handleAddNewHouse = (e) => {
+        e.preventDefault();
+        if (!newHouse.nombre || !newHouse.medidor) {
+          notify('Por favor complete los campos obligatorios.');
+          return;
+        }
+
+        const nextCode = newHouse.codigo.trim() || `SE-${String(houses.length + 1).padStart(3, '0')}`;
+        const prevReading = parseFloat(newHouse.lecturaAnterior) || 0;
+
+        const created = {
+          id: `house-new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          codigo: nextCode,
+          nombre: newHouse.nombre,
+          medidor: newHouse.medidor,
+          lecturaAnterior: prevReading,
+          lecturaActual: null,
+          estatus: 'Pendiente',
+          novedades: newHouse.novedades || 'Sin novedad',
+          consumo: null,
+          tarifa: newHouse.tarifa || 'Residencial',
+          costo: null,
+          phone: newHouse.phone || '+50588888888',
+          readingDate: null,
+          pendingBalance: parseFloat(newHouse.pendingBalance) || 0
+        };
+
+        setHouses((prev) => [...prev, created]);
+        setShowNewHouseModal(false);
+        setNewHouse({
+          codigo: '',
+          nombre: '',
+          medidor: '',
+          lecturaAnterior: 0,
+          tarifa: 'Residencial',
+          novedades: 'Sin novedad',
+          phone: '',
+          pendingBalance: 0
+        });
+        notify(`Usuario ${created.nombre} (${created.codigo}) registrado.`);
+      };
+
+      const processRowsMatrix = (matrix) => {
+        if (!matrix || matrix.length < 2) {
+          setImportError('El archivo debe incluir al menos la fila de títulos y un usuario.');
+          setImportParsedPreview([]);
+          return;
+        }
+
+        let headerRowIdx = -1;
+        let idxCodigo = -1;
+        let idxNombre = -1;
+        let idxMedidor = -1;
+        let idxLecturaAnt = -1;
+        let idxLecturaAct = -1;
+        let idxEstatus = -1;
+        let idxNovedades = -1;
+        let idxConsumo = -1;
+        let idxTarifa = -1;
+        let idxCosto = -1;
+
+        for (let r = 0; r < Math.min(matrix.length, 6); r++) {
+          const candidateHeaders = matrix[r].map((h) => String(h || '').trim().toLowerCase().replace(/["']/g, ''));
+          const findInCandidate = (keywords) => candidateHeaders.findIndex((h) => keywords.some((k) => h.includes(k)));
+
+          const foundCod = findInCandidate(['codigo', 'código', 'id', 'cod']);
+          const foundNom = findInCandidate(['nombre', 'cliente', 'usuario', 'titular']);
+          const foundMed = findInCandidate(['medidor', 'contador', 'no_medidor', 'serie']);
+
+          if (foundCod !== -1 || foundNom !== -1 || foundMed !== -1) {
+            headerRowIdx = r;
+            idxCodigo = foundCod;
+            idxNombre = foundNom;
+            idxMedidor = foundMed;
+            idxLecturaAnt = findInCandidate(['lectura anterior', 'lectura_anterior', 'anterior', 'lect_ant']);
+            idxLecturaAct = findInCandidate(['lectura actual', 'lectura_actual', 'actual', 'lect_act']);
+            idxEstatus = findInCandidate(['estatus', 'estado', 'status']);
+            idxNovedades = findInCandidate(['novedades', 'novedad', 'observacion', 'observaciones']);
+            idxConsumo = findInCandidate(['consumo', 'm3', 'consumo_m3']);
+            idxTarifa = findInCandidate(['tarifa', 'tipo_tarifa', 'categoria']);
+            idxCosto = findInCandidate(['costo', 'total', 'monto', 'importe']);
+            break;
+          }
+        }
+
+        if (headerRowIdx === -1) {
+          setImportError('No se reconocieron las columnas mínimas: Codigo, Nombre o Medidor.');
+          setImportParsedPreview([]);
+          return;
+        }
+
+        const parsedRecords = [];
+        for (let i = headerRowIdx + 1; i < matrix.length; i++) {
+          const row = matrix[i];
+          if (!row || row.length === 0) continue;
+
+          const hasContent = row.some((cell) => String(cell || '').trim() !== '');
+          if (!hasContent) continue;
+
+          const rawCodigo = idxCodigo !== -1 && row[idxCodigo] ? String(row[idxCodigo]).trim() : '';
+          const rawNombre = idxNombre !== -1 && row[idxNombre] ? String(row[idxNombre]).trim() : '';
+          const rawMedidor = idxMedidor !== -1 && row[idxMedidor] ? String(row[idxMedidor]).trim() : '';
+
+          const lowerCod = rawCodigo.toLowerCase();
+          const lowerNom = rawNombre.toLowerCase();
+          if (lowerCod === 'codigo' || lowerCod === 'código' || lowerNom === 'nombre' || lowerNom === 'cliente') {
+            continue;
+          }
+
+          const codigo = rawCodigo || `SE-${String(100 + i)}`;
+          const nombre = rawNombre || `Usuario ${i}`;
+          const medidor = rawMedidor || `MED-${1000 + i}`;
+          const lecturaAnterior = idxLecturaAnt !== -1 ? parseFloat(row[idxLecturaAnt]) || 0 : 0;
+          const lecturaActualVal = idxLecturaAct !== -1 && row[idxLecturaAct] !== '' && !isNaN(parseFloat(row[idxLecturaAct]))
+            ? parseFloat(row[idxLecturaAct])
+            : null;
+          const estatus = idxEstatus !== -1 && row[idxEstatus] ? String(row[idxEstatus]).trim() : (lecturaActualVal !== null ? 'Leído' : 'Pendiente');
+          const novedades = idxNovedades !== -1 && row[idxNovedades] ? String(row[idxNovedades]).trim() : 'Sin novedad';
+          const tarifa = idxTarifa !== -1 && row[idxTarifa] ? String(row[idxTarifa]).trim() : 'Residencial';
+
+          let consumo = idxConsumo !== -1 && row[idxConsumo] !== '' ? parseFloat(row[idxConsumo]) : null;
+          let costo = idxCosto !== -1 && row[idxCosto] !== '' ? parseFloat(row[idxCosto]) : null;
+
+          if (lecturaActualVal !== null && consumo === null) {
+            consumo = Math.max(0, lecturaActualVal - lecturaAnterior);
+          }
+          if (lecturaActualVal !== null && costo === null) {
+            const calc = calculateWaterBill(lecturaAnterior, lecturaActualVal, 0, tariff);
+            costo = calc.total;
+          }
+
+          parsedRecords.push({
+            id: `imported-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+            codigo,
+            nombre,
+            medidor,
+            lecturaAnterior,
+            lecturaActual: lecturaActualVal,
+            estatus,
+            novedades,
+            consumo,
+            tarifa,
+            costo,
+            phone: '+50588888888',
+            readingDate: lecturaActualVal !== null ? new Date().toISOString().split('T')[0] : null,
+            pendingBalance: 0
+          });
+        }
+
+        if (parsedRecords.length === 0) {
+          setImportError('No se encontraron usuarios válidos en el archivo.');
+          setImportParsedPreview([]);
+        } else {
+          setImportError(null);
+          setImportParsedPreview(parsedRecords);
+        }
+      };
+
+      const parseCSVData = (rawText) => {
+        if (!rawText || !rawText.trim()) {
+          setImportParsedPreview([]);
+          setImportError(null);
+          return;
+        }
+
+        try {
+          const lines = rawText.trim().split(/\r?\n/).filter((l) => l.trim().length > 0);
+          if (lines.length < 2) {
+            setImportError('El texto debe incluir encabezados y al menos un registro.');
+            setImportParsedPreview([]);
+            return;
+          }
+
+          const firstLine = lines[0];
+          let delimiter = ',';
+          if (firstLine.includes(';') && (firstLine.split(';').length > firstLine.split(',').length)) {
+            delimiter = ';';
+          } else if (firstLine.includes('\t') && (firstLine.split('\t').length > firstLine.split(',').length)) {
+            delimiter = '\t';
+          }
+
+          const matrix = lines.map((l) => parseCSVLine(l, delimiter));
+          processRowsMatrix(matrix);
+        } catch (err) {
+          setImportError('Error procesando CSV: ' + err.message);
+          setImportParsedPreview([]);
+        }
+      };
+
+      const handleFileInputChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const fileName = file.name.toLowerCase();
+        const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+
+        if (isExcel && window.XLSX) {
+          try {
+            notify('Leyendo archivo Excel...');
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              try {
+                const data = new Uint8Array(event.target?.result);
+                const workbook = window.XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+                if (!rows || rows.length === 0) {
+                  setImportError('La hoja de cálculo está vacía.');
+                  return;
+                }
+
+                processRowsMatrix(rows);
+                const previewCsv = rows.slice(0, 10).map((r) => r.join(',')).join('\n');
+                setImportText(previewCsv);
+                notify(`Excel cargado con éxito (${firstSheetName})`);
+              } catch (error) {
+                setImportError('No se pudo leer el archivo Excel: ' + error.message);
+              }
+            };
+            reader.readAsArrayBuffer(file);
+          } catch (err) {
+            setImportError('Error al procesar Excel: ' + err.message);
+          }
+        } else {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const content = event.target?.result;
+            if (typeof content === 'string') {
+              setImportText(content);
+              parseCSVData(content);
+            }
+          };
+          reader.readAsText(file);
+        }
+      };
+
+      const handleApplyImport = () => {
+        if (importParsedPreview.length === 0) {
+          notify('No hay registros válidos para importar.');
+          return;
+        }
+
+        if (importMode === 'replace') {
+          setHouses(sanitizeHouses(importParsedPreview));
+          notify(`Padrón reemplazado con ${importParsedPreview.length} usuarios.`);
+        } else {
+          setHouses((prev) => sanitizeHouses([...prev, ...importParsedPreview]));
+          notify(`Se agregaron ${importParsedPreview.length} usuarios a la ruta.`);
+        }
+
+        setShowImportModal(false);
+        setImportText('');
+        setImportParsedPreview([]);
+        setImportError(null);
+      };
+
+      const downloadSampleTemplate = () => {
+        const rows = [
+          ["Codigo", "Nombre", "Medidor", "Lectura Anterior", "Lectura Actual", "Estatus", "Novedades", "Consumo", "TARIFA", "COSTO"],
+          ["SE-001", "María Eugenia Flores", "MED-8901", 412, "", "Pendiente", "Sin novedad", "", "Residencial", ""],
+          ["SE-002", "Carlos Alberto Morales", "MED-8902", 580, 598, "Leído", "Sin novedad", 18, "Residencial", 211.00],
+          ["SE-003", "Doña Rosa Pastora", "MED-8903", 215, "", "Pendiente", "Sin novedad", "", "Social", ""],
+          ["SE-004", "Juan José Gutiérrez", "MED-8904", 890, "", "Pendiente", "Posible fuga interna", "", "Comercial", ""]
+        ];
+
+        if (window.XLSX) {
+          const ws = window.XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [
+            { wch: 10 }, { wch: 26 }, { wch: 12 }, { wch: 16 },
+            { wch: 16 }, { wch: 12 }, { wch: 22 }, { wch: 10 },
+            { wch: 14 }, { wch: 12 }
+          ];
+          const wb = window.XLSX.utils.book_new();
+          window.XLSX.utils.book_append_sheet(wb, ws, "PadronMedidores");
+          window.XLSX.writeFile(wb, "plantilla_santa_eduviges.xlsx");
+          notify('Plantilla Excel (.xlsx) descargada.');
+        } else {
+          const csvContent = rows.map((r) => r.join(',')).join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'plantilla_santa_eduviges.csv';
+          link.click();
+        }
+      };
+
+      const handleExportCurrentRoute = () => {
+        if (houses.length === 0) {
+          notify('No hay datos en la ruta para exportar.');
+          return;
+        }
+
+        const rows = [
+          ["Codigo", "Nombre", "Medidor", "Lectura Anterior", "Lectura Actual", "Estatus", "Novedades", "Consumo", "TARIFA", "COSTO"]
+        ];
+
+        houses.forEach((h) => {
+          const bill = calculateWaterBill(h.lecturaAnterior, h.lecturaActual, h.pendingBalance, tariff);
+          const rowConsumo = h.lecturaActual !== null ? (h.consumo !== null ? h.consumo : bill.consumptionM3) : '';
+          const rowCosto = h.lecturaActual !== null ? (h.costo !== null && h.costo !== undefined ? h.costo : bill.total) : '';
+
+          rows.push([
+            h.codigo || '',
+            h.nombre || '',
+            h.medidor || '',
+            h.lecturaAnterior,
+            h.lecturaActual !== null ? h.lecturaActual : '',
+            h.estatus || 'Pendiente',
+            h.novedades || 'Sin novedad',
+            rowConsumo,
+            h.tarifa || 'Residencial',
+            rowCosto
+          ]);
+        });
+
+        if (window.XLSX) {
+          const ws = window.XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [
+            { wch: 10 }, { wch: 26 }, { wch: 12 }, { wch: 16 },
+            { wch: 16 }, { wch: 12 }, { wch: 22 }, { wch: 10 },
+            { wch: 14 }, { wch: 12 }
+          ];
+          const wb = window.XLSX.utils.book_new();
+          window.XLSX.utils.book_append_sheet(wb, ws, "Lecturas");
+          window.XLSX.writeFile(wb, `lecturas_santa_eduviges_${new Date().toISOString().split('T')[0]}.xlsx`);
+          notify('Archivo Excel (.xlsx) exportado.');
+        } else {
+          let csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `lecturas_santa_eduviges_${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+          notify('Archivo CSV exportado.');
+        }
+      };
+
+      const activeBill = useMemo(() => {
+        if (!selectedHouse) return null;
+        const readingVal = readingInput !== '' ? parseFloat(readingInput) : selectedHouse.lecturaActual;
+        return calculateWaterBill(selectedHouse.lecturaAnterior, readingVal, selectedHouse.pendingBalance, tariff);
+      }, [selectedHouse, readingInput, tariff]);
+
+      return (
+        <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans pb-20 md:pb-6">
+          {/* Notificación Toast */}
+          {toastMessage && (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm border border-slate-700">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              <span>{toastMessage}</span>
+            </div>
+          )}
+
+          {/* Barra Superior */}
+          <header className="bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-600 text-white shadow-md sticky top-0 z-30">
+            <div className="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl shadow-inner">
+                  <Droplet className="w-6 h-6 text-cyan-200" />
+                </div>
+                <div>
+                  <h1 className="font-bold text-lg leading-tight tracking-tight">Agua Potable Santa Eduviges</h1>
+                  <p className="text-xs text-blue-100 font-medium">Toma de Lecturas, Novedades & Facturación</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition active:scale-95"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+                  <span className="hidden sm:inline">Excel/CSV</span>
+                </button>
+                <button
+                  onClick={() => setShowNewHouseModal(true)}
+                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Nuevo Usuario</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('tariff')}
+                  className={`p-2 rounded-lg transition ${activeTab === 'tariff' ? 'bg-white text-blue-700' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+                  title="Configurar Tarifas"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Barra de Progreso */}
+            <div className="max-w-5xl mx-auto px-4 pb-2">
+              <div className="flex items-center justify-between text-xs text-blue-100 mb-1">
+                <span>Progreso: {stats.completed} de {stats.total} medidores leídos</span>
+                <span className="font-bold">{Math.round((stats.completed / (stats.total || 1)) * 100)}%</span>
+              </div>
+              <div className="w-full bg-blue-900/40 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-cyan-300 h-full rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${(stats.completed / (stats.total || 1)) * 100}%` }}
+                />
+              </div>
+            </div>
+          </header>
+
+          {/* Contenido Principal */}
+          <main className="max-w-5xl mx-auto px-4 py-4 w-full flex-1">
+            {/* Pestañas de Navegación */}
+            <div className="flex items-center gap-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-4 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('route')}
+                className={`flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                  activeTab === 'route' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <MapPin className="w-4 h-4" />
+                <span>Padrón ({houses.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('summary')}
+                className={`flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                  activeTab === 'summary' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>Resumen & Tabla</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('tariff')}
+                className={`flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                  activeTab === 'tariff' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Configurar Tarifas</span>
+              </button>
+            </div>
+
+            {/* Pestaña: Ruta de Campo */}
+            {activeTab === 'route' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div className="lg:col-span-6 flex flex-col gap-3">
+                  <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 flex flex-col gap-2.5">
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por Código, Nombre, Medidor o Novedad..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedTarifaFilter}
+                        onChange={(e) => setSelectedTarifaFilter(e.target.value)}
+                        className="w-1/2 py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="ALL">Todas las Tarifas ({tarifasDisponibles.length})</option>
+                        {tarifasDisponibles.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="w-1/2 py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="ALL">Todos los Estatus ({houses.length})</option>
+                        <option value="Pendiente">Pendientes ({stats.pending})</option>
+                        <option value="Leído">Leídos ({stats.completed})</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 max-h-[600px] overflow-y-auto pr-1">
+                    {filteredHouses.length === 0 ? (
+                      <div className="bg-white rounded-2xl p-8 text-center text-slate-400 border border-dashed border-slate-300">
+                        <Droplet className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                        <p className="text-sm font-medium">No se encontraron medidores con ese filtro.</p>
+                      </div>
+                    ) : (
+                      filteredHouses.map((house, idx) => {
+                        const isSelected = selectedHouse?.codigo === house.codigo;
+                        const isDone = house.estatus === 'Leído';
+                        const diff = isDone && house.lecturaActual !== null ? house.lecturaActual - house.lecturaAnterior : null;
+                        const hasAnomalia = house.novedades && house.novedades !== 'Sin novedad';
+
+                        return (
+                          <div
+                            key={house.id || `${house.codigo}-${idx}`}
+                            onClick={() => handleOpenReading(house)}
+                            className={`p-3.5 rounded-2xl cursor-pointer transition border text-left ${
+                              isSelected
+                                ? 'bg-blue-50/80 border-blue-500 shadow-md ring-2 ring-blue-400/30'
+                                : isDone
+                                ? 'bg-white border-emerald-200 hover:border-emerald-300'
+                                : 'bg-white border-slate-200 hover:border-blue-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md">
+                                  {house.codigo}
+                                </span>
+                                <span className="font-bold text-sm text-slate-900">{house.nombre}</span>
+                              </div>
+                              {isDone ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Leído
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                  Pendiente
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs text-slate-600 mt-2">
+                              <div className="flex items-center gap-2">
+                                <span>Medidor: <strong className="font-mono text-slate-800">{house.medidor}</strong></span>
+                                <span>•</span>
+                                <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-md">
+                                  Tarifa: {house.tarifa}
+                                </span>
+                              </div>
+
+                              {house.costo !== null && house.costo !== undefined && (
+                                <span className="font-bold font-mono text-emerald-700 text-xs">
+                                  {tariff.currency} {Number(house.costo).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+
+                            {hasAnomalia && (
+                              <div className="mt-1.5 flex items-center gap-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-amber-600" />
+                                <span className="font-medium truncate">Novedad: {house.novedades}</span>
+                              </div>
+                            )}
+
+                            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                              <span className="text-slate-500">
+                                Lect. Ant: <strong className="text-slate-700 font-mono">{house.lecturaAnterior} m³</strong>
+                              </span>
+                              {isDone ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-slate-500">
+                                    Lect. Act: <strong className="text-emerald-700 font-mono">{house.lecturaActual} m³</strong>
+                                  </span>
+                                  <span className="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-md font-mono text-[11px]">
+                                    Consumo: {diff} m³
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-blue-600 font-semibold flex items-center gap-1">
+                                  Registrar lectura <ArrowRight className="w-3 h-3" />
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Columna Derecha: Formulario de Toma de Lectura */}
+                <div className="lg:col-span-6">
+                  {selectedHouse ? (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sticky top-24">
+                      <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md font-mono">
+                              {selectedHouse.codigo}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                              Tarifa: {selectedHouse.tarifa}
+                            </span>
+                          </div>
+                          <h2 className="text-lg font-bold text-slate-900 mt-1">{selectedHouse.nombre}</h2>
+                          <p className="text-xs text-slate-500 font-mono">Medidor: <strong>{selectedHouse.medidor}</strong></p>
+                        </div>
+
+                        <button
+                          onClick={() => setSelectedHouse(null)}
+                          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="mt-4 flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <span className="text-xs text-slate-500 block">Lectura Anterior</span>
+                            <span className="text-xl font-mono font-bold text-slate-800">
+                              {selectedHouse.lecturaAnterior} <span className="text-xs font-normal text-slate-500">m³</span>
+                            </span>
+                          </div>
+
+                          <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+                            <span className="text-xs text-blue-700 font-medium block">Consumo Calculado</span>
+                            <span className="text-xl font-mono font-bold text-blue-900">
+                              {activeBill ? activeBill.consumptionM3 : 0} <span className="text-xs font-normal text-blue-700">m³</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase">
+                            Lectura Actual del Medidor (m³)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              step="any"
+                              value={readingInput}
+                              placeholder={`Mínimo ${selectedHouse.lecturaAnterior}`}
+                              onChange={(e) => setReadingInput(e.target.value)}
+                              className="w-full text-2xl font-mono font-bold px-4 py-3 bg-slate-50 border-2 border-blue-400 focus:border-blue-600 rounded-xl focus:outline-none focus:bg-white text-slate-900"
+                            />
+                            <span className="absolute right-4 top-4 font-mono font-semibold text-slate-400 text-sm">
+                              m³
+                            </span>
+                          </div>
+                          {readingInput !== '' && parseFloat(readingInput) < selectedHouse.lecturaAnterior && (
+                            <p className="text-xs text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              No puede ser menor a la lectura anterior ({selectedHouse.lecturaAnterior} m³)
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase">
+                            Novedades / Incidencias en Sitio
+                          </label>
+                          <input
+                            type="text"
+                            value={novedadInput}
+                            onChange={(e) => setNovedadInput(e.target.value)}
+                            placeholder="Ej: Sin novedad, Medidor empañado, Fuga..."
+                            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1.5"
+                          />
+                          <div className="flex flex-wrap gap-1">
+                            {NOVEDADES_COMUNES.slice(0, 5).map((nov) => (
+                              <button
+                                key={nov}
+                                type="button"
+                                onClick={() => setNovedadInput(nov)}
+                                className={`text-[10px] px-2 py-0.5 rounded-lg border transition ${
+                                  novedadInput === nov
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {nov}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {activeBill && (
+                          <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-xl p-3.5 border border-slate-200 text-xs flex flex-col gap-1.5">
+                            <div className="flex justify-between text-slate-600">
+                              <span>Consumo m³:</span>
+                              <strong className="font-mono text-slate-800">{activeBill.consumptionM3} m³</strong>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Tarifa aplicada:</span>
+                              <span className="font-medium text-blue-700">{selectedHouse.tarifa}</span>
+                            </div>
+                            {activeBill.breakdown.map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-slate-600">
+                                <span>{item.concept}:</span>
+                                <span className="font-mono">{tariff.currency} {item.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                            <div className="pt-2 mt-1 border-t border-slate-300 flex justify-between items-center text-sm font-bold text-slate-900">
+                              <span>COSTO Total:</span>
+                              <span className="text-emerald-700 font-mono text-base">
+                                {tariff.currency} {activeBill.total.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2.5 pt-1">
+                          <button
+                            onClick={() => handleSaveReading(false)}
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition active:scale-95 text-xs flex items-center justify-center gap-1.5"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            Guardar Lectura
+                          </button>
+
+                          <button
+                            onClick={() => handleSaveReading(true)}
+                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition active:scale-95 text-xs flex items-center justify-center gap-1.5"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Guardar e Imprimir
+                          </button>
+                        </div>
+
+                        {selectedHouse.estatus === 'Leído' && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setShowReceiptModal(true)}
+                              className="flex-1 py-2 px-3 border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              Reimprimir Recibo
+                            </button>
+                            <button
+                              onClick={() => handleSendWhatsApp(selectedHouse)}
+                              className="flex-1 py-2 px-3 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              WhatsApp
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center text-slate-400 flex flex-col items-center justify-center min-h-[350px]">
+                      <div className="p-4 bg-blue-50 text-blue-500 rounded-full mb-3">
+                        <Droplet className="w-8 h-8" />
+                      </div>
+                      <h3 className="font-bold text-slate-700 text-base">Seleccione una casa de la lista</h3>
+                      <p className="text-xs text-slate-500 max-w-xs mt-1">
+                        Toque cualquier registro para ingresar la <strong>Lectura Actual</strong>, calcular el <strong>Consumo</strong>, anotar novedades e imprimir el recibo.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pestaña: Resumen & Tabla Completa */}
+            {activeTab === 'summary' && (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-semibold text-slate-500">Medidores Leídos</span>
+                    <div className="text-2xl font-bold text-slate-800 mt-1">
+                      {stats.completed} <span className="text-xs font-normal text-slate-400">/ {stats.total}</span>
+                    </div>
+                    <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
+                      {Math.round((stats.completed / (stats.total || 1)) * 100)}% completado
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-semibold text-slate-500">Pendientes</span>
+                    <div className="text-2xl font-bold text-amber-600 mt-1">{stats.pending}</div>
+                    <span className="text-[11px] text-slate-400 mt-1 block">Faltan por registrar</span>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-semibold text-slate-500">Consumo Total</span>
+                    <div className="text-2xl font-bold text-blue-600 mt-1 font-mono">
+                      {stats.totalM3} <span className="text-xs font-normal text-slate-500">m³</span>
+                    </div>
+                    <span className="text-[11px] text-blue-500 font-medium mt-1 block">Volumen registrado</span>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-semibold text-slate-500">COSTO Facturado</span>
+                    <div className="text-2xl font-bold text-emerald-600 mt-1 font-mono">
+                      {tariff.currency} {stats.totalBilled.toFixed(2)}
+                    </div>
+                    <span className="text-[11px] text-emerald-600 font-medium mt-1 block">Total recaudación</span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-hidden">
+                  <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-sm">Padrón de Facturación de Agua</h3>
+                      <span className="text-xs text-slate-500">
+                        10 Columnas Oficiales de Santa Eduviges
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleExportCurrentRoute}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Exportar Excel / CSV</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto mt-3">
+                    <table className="w-full text-left text-xs whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 uppercase tracking-wider font-bold border-b border-slate-200">
+                          <th className="py-2.5 px-3">Codigo</th>
+                          <th className="py-2.5 px-3">Nombre</th>
+                          <th className="py-2.5 px-3">Medidor</th>
+                          <th className="py-2.5 px-3 font-mono">Lectura Anterior</th>
+                          <th className="py-2.5 px-3 font-mono">Lectura Actual</th>
+                          <th className="py-2.5 px-3 text-center">Estatus</th>
+                          <th className="py-2.5 px-3">Novedades</th>
+                          <th className="py-2.5 px-3 font-mono text-center">Consumo</th>
+                          <th className="py-2.5 px-3">TARIFA</th>
+                          <th className="py-2.5 px-3 font-mono text-right">COSTO</th>
+                          <th className="py-2.5 px-3 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {houses.map((h, idx) => {
+                          const bill = calculateWaterBill(h.lecturaAnterior, h.lecturaActual, h.pendingBalance, tariff);
+                          const finalConsumo = h.lecturaActual !== null ? (h.consumo !== null ? h.consumo : bill.consumptionM3) : '-';
+                          const finalCosto = h.lecturaActual !== null ? (h.costo !== null && h.costo !== undefined ? h.costo : bill.total) : null;
+                          const isDone = h.estatus === 'Leído';
+
+                          return (
+                            <tr key={h.id || `${h.codigo}-${idx}`} className="hover:bg-slate-50/80 transition">
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{h.codigo}</td>
+                              <td className="py-2.5 px-3 font-semibold text-slate-900">{h.nombre}</td>
+                              <td className="py-2.5 px-3 font-mono text-slate-600">{h.medidor}</td>
+                              <td className="py-2.5 px-3 font-mono text-slate-500">{h.lecturaAnterior} m³</td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                                {h.lecturaActual !== null ? `${h.lecturaActual} m³` : '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                {isDone ? (
+                                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    Leído
+                                  </span>
+                                ) : (
+                                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    Pendiente
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-700 max-w-[160px] truncate" title={h.novedades}>
+                                {h.novedades !== 'Sin novedad' ? (
+                                  <span className="text-amber-700 font-medium">{h.novedades}</span>
+                                ) : (
+                                  <span className="text-slate-400">Sin novedad</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-center text-blue-700">
+                                {finalConsumo !== '-' ? `${finalConsumo} m³` : '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-700 font-medium">
+                                <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                                  {h.tarifa}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-right text-slate-900">
+                                {finalCosto !== null ? `${tariff.currency} ${Number(finalCosto).toFixed(2)}` : '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedHouse(h);
+                                      setReadingInput(h.lecturaActual !== null ? h.lecturaActual.toString() : '');
+                                      setNovedadInput(h.novedades || 'Sin novedad');
+                                      setShowReceiptModal(true);
+                                    }}
+                                    disabled={h.lecturaActual === null}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Imprimir Recibo"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleSendWhatsApp(h)}
+                                    disabled={h.lecturaActual === null}
+                                    className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Enviar por WhatsApp"
+                                  >
+                                    <Share2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pestaña: Configuración de Tarifas */}
+            {activeTab === 'tariff' && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 max-w-2xl mx-auto">
+                <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+                  <DollarSign className="w-6 h-6 text-blue-600" />
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">Estructura Tarifaria de Agua</h3>
+                    <p className="text-xs text-slate-500">Configura la fórmula de cálculo del COSTO</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre del Servicio / Comité</label>
+                    <input
+                      type="text"
+                      value={tariff.providerName}
+                      onChange={(e) => setTariff({ ...tariff, providerName: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Teléfono de Atención</label>
+                    <input
+                      type="text"
+                      value={tariff.providerPhone}
+                      onChange={(e) => setTariff({ ...tariff, providerPhone: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Símbolo de Moneda</label>
+                    <input
+                      type="text"
+                      value={tariff.currency}
+                      onChange={(e) => setTariff({ ...tariff, currency: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Cargo Básico Fijo ({tariff.currency})
+                    </label>
+                    <input
+                      type="number"
+                      value={tariff.fixedCharge}
+                      onChange={(e) => setTariff({ ...tariff, fixedCharge: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      m³ incluidos en Tarifa Básica
+                    </label>
+                    <input
+                      type="number"
+                      value={tariff.baseAllowanceM3}
+                      onChange={(e) => setTariff({ ...tariff, baseAllowanceM3: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Tarifa Tramo 1 ({tariff.currency}/m³ adicional)
+                    </label>
+                    <input
+                      type="number"
+                      value={tariff.tier1Rate}
+                      onChange={(e) => setTariff({ ...tariff, tier1Rate: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Límite Tramo 1 (hasta m³)
+                    </label>
+                    <input
+                      type="number"
+                      value={tariff.tier1Limit}
+                      onChange={(e) => setTariff({ ...tariff, tier1Limit: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Tarifa Tramo 2 Alto Consumo ({tariff.currency}/m³)
+                    </label>
+                    <input
+                      type="number"
+                      value={tariff.tier2Rate}
+                      onChange={(e) => setTariff({ ...tariff, tier2Rate: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Cargo Mantenimiento / Red Fijo ({tariff.currency})
+                    </label>
+                    <input
+                      type="number"
+                      value={tariff.sewerageFee}
+                      onChange={(e) => setTariff({ ...tariff, sewerageFee: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Mensaje al pie del recibo
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={tariff.receiptNotes}
+                      onChange={(e) => setTariff({ ...tariff, receiptNotes: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-slate-100 flex justify-end">
+                  <button
+                    onClick={() => {
+                      notify('Configuración guardada.');
+                      setActiveTab('route');
+                    }}
+                    className="py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition"
+                  >
+                    Guardar y Volver a la Ruta
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* Modal: Recibo Térmico de 58mm */}
+          {showReceiptModal && selectedHouse && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Printer className="w-4 h-4 text-cyan-400" />
+                    <span className="font-bold text-sm">Recibo de Cobro</span>
+                  </div>
+                  <button
+                    onClick={() => setShowReceiptModal(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 overflow-y-auto bg-slate-100 flex justify-center">
+                  <div
+                    ref={receiptPrintRef}
+                    id="thermal-receipt"
+                    className="bg-white w-[280px] p-4 font-mono text-[11px] text-black shadow-md border border-slate-200 rounded-sm leading-tight"
+                  >
+                    <div className="text-center pb-2 border-b border-dashed border-black">
+                      <div className="text-xs font-bold uppercase">{tariff.providerName}</div>
+                      <div>RUC: {tariff.providerRuc}</div>
+                      <div>Tel: {tariff.providerPhone}</div>
+                      <div className="font-bold mt-1 text-[12px]">AVISO DE COBRO</div>
+                      <div className="text-[10px]">{new Date().toLocaleString()}</div>
+                    </div>
+
+                    <div className="py-2 border-b border-dashed border-black space-y-0.5">
+                      <div><strong>CÓDIGO:</strong> {selectedHouse.codigo}</div>
+                      <div><strong>NOMBRE:</strong> {selectedHouse.nombre}</div>
+                      <div><strong>MEDIDOR:</strong> {selectedHouse.medidor}</div>
+                      <div><strong>TARIFA:</strong> {selectedHouse.tarifa}</div>
+                      <div><strong>ESTATUS:</strong> {selectedHouse.estatus}</div>
+                      {selectedHouse.novedades && selectedHouse.novedades !== 'Sin novedad' && (
+                        <div className="text-[10px] text-red-700"><strong>NOVEDAD:</strong> {selectedHouse.novedades}</div>
+                      )}
+                    </div>
+
+                    <div className="py-2 border-b border-dashed border-black space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>Lectura Actual:</span>
+                        <strong>{selectedHouse.lecturaActual || readingInput} m³</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lectura Anterior:</span>
+                        <span>{selectedHouse.lecturaAnterior} m³</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-xs pt-1 border-t border-dotted border-black">
+                        <span>CONSUMO:</span>
+                        <span>{activeBill ? activeBill.consumptionM3 : 0} m³</span>
+                      </div>
+                    </div>
+
+                    <div className="py-2 border-b border-dashed border-black space-y-1">
+                      {activeBill?.breakdown.map((item, i) => (
+                        <div key={i} className="flex justify-between">
+                          <span className="text-[10px]">{item.concept}</span>
+                          <span>{tariff.currency}{item.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="py-2 text-center border-b border-dashed border-black">
+                      <div className="text-[11px] font-bold">COSTO TOTAL A PAGAR</div>
+                      <div className="text-lg font-black">
+                        {tariff.currency} {activeBill ? activeBill.total.toFixed(2) : '0.00'}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 text-center text-[9px] space-y-1">
+                      <div>*** {tariff.receiptNotes} ***</div>
+                      <div>¡Cuidar el agua es cuidar la vida!</div>
+                      <div className="pt-2 font-mono text-[8px] text-slate-500">
+                        COMPROBANTE EMITIDO EN SITIO
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white border-t border-slate-100 flex flex-col gap-2">
+                  <button
+                    onClick={handlePrint}
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir en Impresora Térmica
+                  </button>
+
+                  <button
+                    onClick={() => handleSendWhatsApp(selectedHouse)}
+                    className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition"
+                  >
+                    <Send className="w-4 h-4" />
+                    Enviar copia por WhatsApp
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Importar Excel/CSV */}
+          {showImportModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                    <h3 className="font-bold text-sm">Importar Padrón de Medidores (Excel o CSV)</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowImportModal(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5 overflow-y-auto flex flex-col gap-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <p className="font-semibold text-blue-950">
+                        Acepta libros de Excel (.xlsx, .xls) y archivos .csv
+                      </p>
+                      <p className="text-blue-800 font-mono text-[11px] mt-0.5">
+                        Codigo, Nombre, Medidor, Lectura Anterior, Lectura Actual, Estatus, Novedades, Consumo, TARIFA, COSTO
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={downloadSampleTemplate}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 hover:bg-blue-100 border border-blue-300 font-bold rounded-xl shadow-sm transition flex-shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Descargar Plantilla Excel
+                    </button>
+                  </div>
+
+                  <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-4 text-center bg-slate-50 transition cursor-pointer relative">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv,.txt"
+                      onChange={handleFileInputChange}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <Upload className="w-8 h-8 text-blue-500 mx-auto mb-1" />
+                    <p className="text-xs font-bold text-slate-700">Toca para seleccionar tu archivo Excel o CSV</p>
+                    <p className="text-[11px] text-slate-500">o arrástralo directamente a esta ventana</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      O pega aquí datos copiados de Excel:
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={importText}
+                      onChange={(e) => {
+                        setImportText(e.target.value);
+                        parseCSVData(e.target.value);
+                      }}
+                      placeholder="Codigo,Nombre,Medidor,Lectura Anterior,Lectura Actual,Estatus,Novedades,Consumo,TARIFA,COSTO&#10;SE-001,María Flores,MED-8901,412,,Pendiente,Sin novedad,,Residencial,"
+                      className="w-full p-3 font-mono text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                    />
+                  </div>
+
+                  {importError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-medium">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                      <span>{importError}</span>
+                    </div>
+                  )}
+
+                  {importParsedPreview.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          {importParsedPreview.length} usuarios listos para importar
+                        </span>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="importMode"
+                              value="append"
+                              checked={importMode === 'append'}
+                              onChange={() => setImportMode('append')}
+                              className="text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-slate-600">Sumar a la lista</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="importMode"
+                              value="replace"
+                              checked={importMode === 'replace'}
+                              onChange={() => setImportMode('replace')}
+                              className="text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-rose-600 font-semibold">Reemplazar padrón</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-xl">
+                        <table className="w-full text-left text-[11px] whitespace-nowrap">
+                          <thead className="bg-slate-100 text-slate-600 sticky top-0">
+                            <tr>
+                              <th className="p-2">Codigo</th>
+                              <th className="p-2">Nombre</th>
+                              <th className="p-2">Medidor</th>
+                              <th className="p-2 font-mono">Lect. Ant.</th>
+                              <th className="p-2 font-mono">Lect. Act.</th>
+                              <th className="p-2">Tarifa</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                            {importParsedPreview.slice(0, 10).map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="p-2 font-mono font-bold text-slate-900">{item.codigo}</td>
+                                <td className="p-2">{item.nombre}</td>
+                                <td className="p-2 font-mono">{item.medidor}</td>
+                                <td className="p-2 font-mono">{item.lecturaAnterior}</td>
+                                <td className="p-2 font-mono">{item.lecturaActual ?? '-'}</td>
+                                <td className="p-2">{item.tarifa}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleExportCurrentRoute}
+                    className="text-xs font-semibold text-slate-600 hover:text-slate-800 flex items-center gap-1"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Exportar lista actual
+                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowImportModal(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyImport}
+                      disabled={importParsedPreview.length === 0}
+                      className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl shadow-md transition flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      Confirmar e Importar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Registrar Nuevo Usuario */}
+          {showNewHouseModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-bold text-slate-900 text-base">Registrar Nuevo Usuario</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowNewHouseModal(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddNewHouse} className="mt-4 flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Codigo</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: SE-006"
+                        value={newHouse.codigo}
+                        onChange={(e) => setNewHouse({ ...newHouse, codigo: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Medidor *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: MED-8906"
+                        value={newHouse.medidor}
+                        onChange={(e) => setNewHouse({ ...newHouse, medidor: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre Completo *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Mario Gómez Morales"
+                      value={newHouse.nombre}
+                      onChange={(e) => setNewHouse({ ...newHouse, nombre: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">TARIFA</label>
+                      <select
+                        value={newHouse.tarifa}
+                        onChange={(e) => setNewHouse({ ...newHouse, tarifa: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="Residencial">Residencial</option>
+                        <option value="Comercial">Comercial</option>
+                        <option value="Social">Social</option>
+                        <option value="Tarifa Básica">Tarifa Básica</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Lectura Anterior (m³)</label>
+                      <input
+                        type="number"
+                        value={newHouse.lecturaAnterior}
+                        onChange={(e) => setNewHouse({ ...newHouse, lecturaAnterior: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Novedades Iniciales</label>
+                    <input
+                      type="text"
+                      placeholder="Sin novedad"
+                      value={newHouse.novedades}
+                      onChange={(e) => setNewHouse({ ...newHouse, novedades: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowNewHouseModal(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm"
+                    >
+                      Agregar a la Lista
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
